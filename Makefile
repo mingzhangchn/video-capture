@@ -14,7 +14,7 @@ all:$(APP)
 
 
 $(APP):$(OBJ) 
-	@g++  $(OBJ) -lyuv -o $@ 
+	@g++  $(OBJ) -lyuv -lx264 -o $@ 
 
     
 %.o:%.cpp

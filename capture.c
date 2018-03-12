@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
+#include <stdint.h>
 #include <getopt.h>             /* getopt_long() */
 
 #include <fcntl.h>              /* low-level i/o */
@@ -25,6 +25,10 @@
 
 #include <linux/videodev2.h>
 
+
+#include <x264.h> 
+
+
 #define CLEAR(x) memset (&(x), 0, sizeof (x))
 
 typedef enum {
@@ -37,7 +41,7 @@ struct buffer {
         void *                  start;
         size_t                  length;
 };
-
+static x264_t *x264Handle = NULL;
 static char *           dev_name        = NULL;
 static io_method	io		= IO_METHOD_MMAP;
 static int              fd              = -1;
@@ -54,9 +58,9 @@ errno_exit                      (const char *           s)
 }
 
 static int
-xioctl                          (int                    fd,
-                                 int                    request,
-                                 void *                 arg)
+xioctl(int                    fd,
+		 int                    request,
+		 void *                 arg)
 {
         int r;
 
@@ -71,6 +75,93 @@ process_image                   (const void *           p)
 {
         fputc ('.', stdout);
         fflush (stdout);
+}
+
+
+int x264_encode_init(x264_t** pHandle, int width, int height)
+{
+	x264_param_t param;   
+	x264_param_default(&param);  
+	param.i_width   = width;  
+	param.i_height  = height;  
+	/* 
+	//Param 
+	param.i_log_level  = X264_LOG_DEBUG; 
+	param.i_threads  = X264_SYNC_LOOKAHEAD_AUTO; 
+	param.i_frame_total = 0; 
+	param->i_keyint_max = 10; 
+	param->i_bframe  = 5; 
+	param->b_open_gop  = 0; 
+	param->i_bframe_pyramid = 0; 
+	param->rc.i_qp_constant=0; 
+	param->rc.i_qp_max=0; 
+	param->rc.i_qp_min=0; 
+	param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS; 
+	param->i_fps_den  = 1; 
+	param->i_fps_num  = 25; 
+	param->i_timebase_den = param->i_fps_num; 
+	param->i_timebase_num = param->i_fps_den; 
+	*/  
+	param.i_csp=X264_CSP_I420;  
+	x264_param_apply_profile(&param, x264_profile_names[5]);  
+
+	*pHandle = x264_encoder_open(&param);  
+
+	return 0;
+}
+
+int x264_encode(x264_t* pHandle, const void *pData, int width, int height){
+	int csp=X264_CSP_I420;  
+	int iNal   = 0;  
+	x264_nal_t* pNals = NULL;  
+	x264_picture_t pic_in;  
+	x264_picture_t pic_out; 	
+	x264_picture_init(&pic_out);  
+	x264_picture_alloc(&pic_out, csp, width, height);  
+
+	//ret = x264_encoder_headers(pHandle, &pNals, &iNal);  
+
+	int y_size = width * height;  
+ 
+	static int frameCount = 0;
+	if (1){  
+		switch(csp){  
+		case X264_CSP_I444:{  
+			//fread(pic_out->img.plane[0],y_size,1,fp_src);         //Y  
+			//fread(pic_out->img.plane[1],y_size,1,fp_src);         //U  
+			//fread(pic_out->img.plane[2],y_size,1,fp_src);         //V  
+			break;}  
+		case X264_CSP_I420:{   
+			memcpy(pic_out.img.plane[0], pData, y_size); //y
+			memcpy(pic_out.img.plane[1], pData  + y_size, y_size/4); //u
+			memcpy(pic_out.img.plane[2], pData  + y_size + y_size/4, y_size/4); //v
+			break;}  
+		default:{  
+			printf("Colorspace Not Support.\n");  
+			return -1;}  
+		}  
+		pic_out.i_pts = frameCount;  
+		frameCount++;
+
+		int ret = x264_encoder_encode(pHandle, &pNals, &iNal, &pic_out, &pic_out);  
+		if (ret< 0){  
+			printf("Error.\n");  
+			return -1;  
+		}
+
+		printf("Succeed encode frame: %5d\n",frameCount); 
+		int j = 0;	
+	    FILE* fp_dst = fopen("./test.264", "a+");
+		if (fp_dst){
+			for ( j = 0; j < iNal; ++j){  
+				fwrite(pNals[j].p_payload, 1, pNals[j].i_payload, fp_dst);  
+				printf(".");
+			}  
+			fclose(fp_dst);
+		}
+	}  
+	
+    return 0;
 }
 
 static void process_image2(const void* pData, int dataLen)
@@ -101,6 +192,7 @@ static void process_image2(const void* pData, int dataLen)
         
         YUY2ToI420(pData, w*2, dst_y, dst_y_stride, dst_u, dst_u_stride, dst_v, dst_v_stride, w, h);  
         
+		x264_encode(x264Handle, pData, w, h);
     }
 }
 
@@ -205,7 +297,7 @@ mainloop                        (void)
 {
 	unsigned int count;
 
-        count = 100;
+        count = 1000;
 
         while (count-- > 0) {
                 for (;;) {
@@ -643,7 +735,7 @@ int
 main                            (int                    argc,
                                  char **                argv)
 {
-        dev_name = "/dev/video";
+        dev_name = "/dev/video0";
 
         for (;;) {
                 int index;
@@ -690,6 +782,8 @@ main                            (int                    argc,
 
         init_device ();
 
+		x264_encode_init(&x264Handle, 640, 480);
+		
         start_capturing ();
 
         mainloop ();
