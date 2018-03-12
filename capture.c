@@ -73,10 +73,41 @@ process_image                   (const void *           p)
         fflush (stdout);
 }
 
+static void process_image2(const void* pData, int dataLen)
+{
+    #if 0
+    char name_buf[256] = {0};
+    static int count = 0;
+    snprintf(name_buf, sizeof(name_buf), "./dest/%d.yuv", count);
+    FILE *fp = fopen( "dest/out.yuv", "a+");
+    if (fp){
+        fwrite(buffers[buf.index].start, 1, buffers[buf.index].length, fp);
+        fclose(fp);
+    }
+    count++;
+    #endif   
+    {//yuv2 to yuv420
+        int w = 640;
+        int h = 480;
+        int p420size = w * h + (w*h + 1)/2;
+        unsigned char I420[p420size];
+        memset(I420, 0, p420size);
+        unsigned char* dst_y = I420;
+        int dst_y_stride = w;
+        unsigned char* dst_u = I420 + w*h;
+        int dst_u_stride = (w + 1) / 2;
+        unsigned char* dst_v = I420 + w*h + (w*h +3)/4;
+        int dst_v_stride = (w + 1) / 2;
+        
+        YUY2ToI420(pData, w*2, dst_y, dst_y_stride, dst_u, dst_u_stride, dst_v, dst_v_stride, w, h);  
+        
+    }
+}
+
 static int
 read_frame			(void)
 {
-        struct v4l2_buffer buf;
+    struct v4l2_buffer buf;
 	unsigned int i;
 
 	switch (io) {
@@ -120,20 +151,11 @@ read_frame			(void)
 			}
 		}
 
-                assert (buf.index < n_buffers);
+        assert (buf.index < n_buffers);
 
-                //printf("buf len:%d\n", buffers[buf.index].length);
-	        process_image (buffers[buf.index].start);
-                char name_buf[256] = {0};
-                static int count = 0;
-                snprintf(name_buf, sizeof(name_buf), "./dest/%d.yuv", count);
-                FILE *fp = fopen( "dest/out.yuv", "a+");
-                if (fp){
-			fwrite(buffers[buf.index].start, 1, buffers[buf.index].length, fp);
-			fclose(fp);
-	        }
-                count++;
-                 
+        //printf("buf len:%d\n", buffers[buf.index].length);
+        process_image2 (buffers[buf.index].start, buffers[buf.index].length);
+   
 		if (-1 == xioctl (fd, VIDIOC_QBUF, &buf))
 			errno_exit ("VIDIOC_QBUF");
 
@@ -142,7 +164,7 @@ read_frame			(void)
 	case IO_METHOD_USERPTR:
 		CLEAR (buf);
 
-    		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     		buf.memory = V4L2_MEMORY_USERPTR;
 
 		if (-1 == xioctl (fd, VIDIOC_DQBUF, &buf)) {

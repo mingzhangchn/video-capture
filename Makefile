@@ -14,7 +14,7 @@ all:$(APP)
 
 
 $(APP):$(OBJ) 
-	@g++  $(OBJ)  -o $@ 
+	@g++  $(OBJ) -lyuv -o $@ 
 
     
 %.o:%.cpp
