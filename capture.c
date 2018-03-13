@@ -151,7 +151,7 @@ int x264_encode(x264_t* pHandle, const void *pData, int width, int height){
 
 		printf("Succeed encode frame: %5d\n",frameCount); 
 		int j = 0;	
-	    FILE* fp_dst = fopen("./test.264", "a+");
+	    FILE* fp_dst = fopen("./out.h264", "a+");
 		if (fp_dst){
 			for ( j = 0; j < iNal; ++j){  
 				fwrite(pNals[j].p_payload, 1, pNals[j].i_payload, fp_dst);  
