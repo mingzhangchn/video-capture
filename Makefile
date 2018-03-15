@@ -1,7 +1,7 @@
 
 
-SRC=capture.c
-OBJ=capture.o
+SRC=capture.c FrameData.cpp FrameQueue.cpp librtmp_send264.cpp
+OBJ=capture.o FrameData.o FrameQueue.o librtmp_send264.o
 
 APP=test
 
@@ -14,7 +14,7 @@ all:$(APP)
 
 
 $(APP):$(OBJ) 
-	@g++  $(OBJ) -lyuv -lx264 -o $@ 
+	@g++  $(OBJ) -lyuv -lx264 -lpthread ./lib/librtmp.a ./lib/libssl.a ./lib/libcrypto.a -ldl -lm -lz -o $@ 
 
     
 %.o:%.cpp

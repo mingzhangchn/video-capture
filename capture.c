@@ -25,9 +25,11 @@
 
 #include <linux/videodev2.h>
 
-
+#include <pthread.h>
 #include <x264.h> 
-
+#include <libyuv.h>
+#include "FrameQueue.h"
+#include "librtmp_send264.h"
 
 #define CLEAR(x) memset (&(x), 0, sizeof (x))
 
@@ -77,6 +79,14 @@ process_image                   (const void *           p)
         fflush (stdout);
 }
 
+void* h264_process(void *arg)
+{
+    char rtmp_url[] = "rtmp://192.168.3.101:1935/live/test";
+    RTMP264_Connect(rtmp_url);
+    RTMP264_Send(NULL);//loop
+    
+    return NULL;
+}
 
 int x264_encode_init(x264_t** pHandle, int width, int height)
 {
@@ -107,6 +117,9 @@ int x264_encode_init(x264_t** pHandle, int width, int height)
 
 	*pHandle = x264_encoder_open(&param);  
 
+    pthread_t threadId;
+    pthread_create(&threadId, NULL, h264_process, NULL);
+    
 	return 0;
 }
 
@@ -132,9 +145,9 @@ int x264_encode(x264_t* pHandle, const void *pData, int width, int height){
 			//fread(pic_out->img.plane[2],y_size,1,fp_src);         //V  
 			break;}  
 		case X264_CSP_I420:{   
-			memcpy(pic_out.img.plane[0], pData, y_size); //y
-			memcpy(pic_out.img.plane[1], pData  + y_size, y_size/4); //u
-			memcpy(pic_out.img.plane[2], pData  + y_size + y_size/4, y_size/4); //v
+			memcpy((void*)pic_out.img.plane[0], pData, y_size); //y
+			memcpy((void*)pic_out.img.plane[1], (void*)((unsigned char*)pData  + y_size), y_size/4); //u
+			memcpy((void*)pic_out.img.plane[2], (void*)((unsigned char*)pData  + y_size + y_size/4), y_size/4); //v
 			break;}  
 		default:{  
 			printf("Colorspace Not Support.\n");  
@@ -154,8 +167,10 @@ int x264_encode(x264_t* pHandle, const void *pData, int width, int height){
 	    FILE* fp_dst = fopen("./out.h264", "a+");
 		if (fp_dst){
 			for ( j = 0; j < iNal; ++j){  
-				fwrite(pNals[j].p_payload, 1, pNals[j].i_payload, fp_dst);  
-				printf(".");
+				//fwrite(pNals[j].p_payload, 1, pNals[j].i_payload, fp_dst);  
+                unsigned char *p = pNals[j].p_payload;
+				printf("%02x %02x %02x\n", p[0], p[1], p[2]);
+                frame_put(pNals[j].p_payload, pNals[j].i_payload);
 			}  
 			fclose(fp_dst);
 		}
